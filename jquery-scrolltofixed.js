@@ -30,10 +30,8 @@
         var target = base.$el;
 
         var position;
+        var originalStyle;      // any inline styles on the element prior to adding
         var originalPosition;
-        var originalFloat;
-        var originalOffsetTop;
-        var originalZIndex;
 
         // The offset top of the element when resetScroll was called. This is
         // used to determine if we have scrolled past the top of the element.
@@ -198,18 +196,34 @@
 
                 // Hide the spacer now that the target element will fill the
                 // space.
-                spacer.css('display', 'none');
+                //
+                // If the target has been or it's contents have changed since the spacer
+                // was created (it's size is smaller then spacer), and the spacer is visible, then.
+                // Gracefully animate the spacer to shrink to no height and scroll to match what space was removed.
+                // Otherwise, if the spacer is invisible, just hide it and scroll with no animation.
+                //
+                if (target.height() < spacer.height() && $.isFunction(spacer.animate)) {
+                    var scrollTop = $(document).scrollTop();
+                    var spacerHidden = scrollTop - spacer.offset().top;
+                    if (spacerHidden >= spacer.height()) {
+                        spacer.css('display', 'none');
+                        $(document).scrollTop(scrollTop - spacer.height())
+                    } else {
+                        $('html, body').animate({scrollTop: scrollTop - spacerHidden}, base.options.spacerAnimateOptions.duration);
+                        spacer.animate({height: 0}, base.options.spacerAnimateOptions);
+                    }
+
+                } else {
+                    spacer.css('display', 'none');
+                }
 
                 // Remove the style attributes that were added to the target.
                 // This will reverse the target back to the its original style.
-                target.css({
-                    'z-index' : originalZIndex,
-                    'width' : '',
-                    'position' : originalPosition,
-                    'left' : '',
-                    'top' : originalOffsetTop,
-                    'margin-left' : ''
-                });
+                if (originalStyle) {
+                    target.attr('style', originalStyle);
+                } else {
+                    target.removeAttr('style');
+                }
 
                 target.removeClass('scroll-to-fixed-fixed');
 
@@ -443,7 +457,8 @@
             // Capture the options for this plugin.
             base.options = $.extend({}, $.ScrollToFixed.defaultOptions, options);
 
-            originalZIndex = target.css('z-index')
+            // Fetch and save any inline styles on the element before this widget runs
+            originalStyle = target.attr('style');
 
             // Turn off this functionality for devices that do not support it.
             // if (!(base.options && base.options.dontCheckForPositionFixedSupport)) {
@@ -462,8 +477,6 @@
 
             position = target.css('position');
             originalPosition = target.css('position');
-            originalFloat = target.css('float');
-            originalOffsetTop = target.css('top');
 
             // Place the spacer right after the target element.
             if (isUnfixed()) base.$el.after(spacer);
@@ -554,6 +567,7 @@
         limit : 0,
         bottom : -1,
         zIndex : 1000,
+        spacerAnimateOptions: {duration: 200},
         baseClassName: 'scroll-to-fixed-fixed'
     };
 
@@ -561,7 +575,9 @@
     // page is scrolled.
     $.fn.scrollToFixed = function(options) {
         return this.each(function() {
-            ($.isScrollToFixed(this) ? this : new $.ScrollToFixed(this, options));
+            if (! $.isScrollToFixed(this)) {
+                $.ScrollToFixed(this, options);
+            }
         });
     };
 })(jQuery);
